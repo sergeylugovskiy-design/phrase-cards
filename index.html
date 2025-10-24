@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phrase Cards — EN ↔ RU + TTS (Cloud-ready)</title>
+  <style>
+    :root{--bg:#0f172a;--panel:#111827;--muted:#94a3b8;--text:#e5e7eb;--accent:#22d3ee;--danger:#ef4444;--ok:#10b981;--warn:#f59e0b}
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;background:#0b1220;color:var(--text)}
+    header{position:sticky;top:0;background:rgba(10,14,24,.9);backdrop-filter:saturate(140%) blur(6px);border-bottom:1px solid #1f2937;z-index:3}
+    .wrap{max-width:1000px;margin:0 auto;padding:16px}
+    h1{font-size:20px;margin:0 0 8px 0}
+    nav{display:flex;gap:8px;flex-wrap:wrap}
+    .tab{padding:8px 12px;border:1px solid #1f2937;border-radius:10px;background:#0b1628;color:var(--text);cursor:pointer}
+    .tab.active{border-color:#233146;background:#132036;outline:1px solid #233146}
+    main{padding:16px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .panel{background:#0b1628;border:1px solid #1f2937;border-radius:12px;padding:12px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    input, textarea, select{width:100%;background:#0c1a2a;border:1px solid #1f2937;color:var(--text);padding:10px;border-radius:10px}
+    textarea{min-height:80px}
+    button{padding:10px 14px;border:1px solid #1f2937;background:#0c1a2a;color:var(--text);border-radius:10px;cursor:pointer}
+    button.primary{background:#0e2138;border-color:#28405e}
+    button.ok{background:#122e24;border-color:#246b4d}
+    button.warn{background:#2c2310;border-color:#5a4212}
+    button.danger{background:#2b1313;border-color:#5a1f1f}
+    .muted{color:var(--muted);font-size:12px}
+    .list{display:grid;gap:8px}
+    .card{display:grid;gap:6px;padding:12px;border:1px solid #1f2937;background:#0b1628;border-radius:12px}
+    .tag{font-size:12px;color:#9ca3af;border:1px solid #1f2937;border-radius:8px;padding:2px 6px}
+    .flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .space{height:8px}
+    .hidden{display:none}
+    .kpi{display:flex;gap:16px;flex-wrap:wrap}
+    .kpi div{background:#0b1628;border:1px solid #1f2937;border-radius:12px;padding:10px 12px}
+    .right{margin-left:auto}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Phrase Cards — EN ↔ RU + TTS (Cloud-ready)</h1>
+      <nav id="nav"></nav>
+    </div>
+  </header>
+  <main class="wrap">
+    <section id="view-add" class="panel">
+      <h2>Добавить фразы</h2>
+      <div class="grid">
+        <div>
+          <label class="muted">Английский (по одной фразе в строке)</label>
+          <textarea id="bulk-en" placeholder="I want to go for a walk\nI have to finish this task"></textarea>
+        </div>
+        <div>
+          <label class="muted">Русский перевод (строка к строке)</label>
+          <textarea id="bulk-ru" placeholder="Я хочу пойти на прогулку\nМне нужно закончить это задание"></textarea>
+        </div>
+      </div>
+      <div class="space"></div>
+      <div class="grid">
+        <div>
+          <label class="muted">Тег/глагол (опционально, одна метка для всех строк)</label>
+          <input id="bulk-tag" placeholder="want / have / travel / work" />
+        </div>
+        <div class="row" style="align-items:flex-end">
+          <button class="primary" id="btn-add">Добавить</button>
+          <span class="muted" id="add-status"></span>
+        </div>
+      </div>
+    </section>
+
+    <div class="space"></div>
+
+    <section id="view-study" class="panel hidden">
+      <div class="row">
+        <h2>Тренировка</h2>
+        <div class="right flex">
+          <label class="muted">Фильтр по тегу</label>
+          <select id="filter-tag"></select>
+          <label class="muted">Английский голос</label>
+          <select id="voice"></select>
+          <label class="muted">Авто‑озвучка</label>
+          <input type="checkbox" id="auto-speak"/>
+        </div>
+      </div>
+      <div class="space"></div>
+      <div class="card" id="study-card">
+        <div class="flex">
+          <span class="tag" id="study-tag"></span>
+          <span class="muted mono" id="study-id"></span>
+          <span class="right muted" id="study-meta"></span>
+        </div>
+        <div style="font-size:22px" id="study-en">—</div>
+        <div style="font-size:18px;color:#cbd5e1" id="study-ru">—</div>
+        <div class="flex">
+          <button id="speak">▶ Озвучить</button>
+          <button id="toggle">Показать/скрыть перевод</button>
+          <button id="next">Дальше</button>
+          <div class="right flex">
+            <button class="ok" id="mark-good">Запомнил</button>
+            <button class="warn" id="mark-hard">Сложно</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="space"></div>
+
+    <section id="view-library" class="panel hidden">
+      <div class="row">
+        <h2>Библиотека</h2>
+        <div class="right kpi">
+          <div>Всего: <b id="kpi-total">0</b></div>
+          <div>По тегу: <b id="kpi-by-tag">0</b></div>
+        </div>
+      </div>
+      <div class="space"></div>
+      <div class="row">
+        <select id="lib-filter-tag"></select>
+        <input id="lib-search" placeholder="Поиск…" style="max-width:300px" />
+        <button id="lib-clear">Сброс</button>
+      </div>
+      <div class="space"></div>
+      <div class="list" id="lib-list"></div>
+    </section>
+
+    <div class="space"></div>
+
+    <section id="view-import" class="panel hidden">
+      <h2>Импорт / Экспорт</h2>
+      <div class="grid">
+        <div>
+          <label class="muted">Импорт (CSV/SSV: заголовки en,ru,tag)</label>
+          <textarea id="csv" placeholder="en,ru,tag\nI want coffee,Я хочу кофе,want\nI have to go,Мне нужно идти,have"></textarea>
+          <div class="row">
+            <button id="btn-import">Импорт из текста</button>
+            <input id="csv-url" placeholder="https://raw.githubusercontent.com/…/phrases.csv" />
+            <button id="btn-fetch">Загрузить по ссылке</button>
+            <button id="btn-import-file">Файл CSV/SSV</button>
+            <input type="file" id="file-csv" class="hidden" accept="text/csv, text/plain" />
+            <span class="muted" id="imp-status"></span>
+          </div>
+        </div>
+        <div>
+          <label class="muted">Экспорт JSON</label>
+          <textarea id="json" readonly></textarea>
+          <div class="row">
+            <button id="btn-export">Скопировать JSON</button>
+            <button id="btn-download">Скачать .json</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="space"></div>
+
+    <section id="view-settings" class="panel hidden">
+      <h2>Настройки</h2>
+      <div class="list">
+        <div class="row">
+          <div style="flex:1">
+            <label class="muted">Supabase URL</label>
+            <input id="cfg-url" placeholder="https://xxxx.supabase.co" />
+          </div>
+          <div style="flex:1">
+            <label class="muted">Supabase anon key</label>
+            <input id="cfg-key" placeholder="eyJhbGciOiJI..." />
+          </div>
+          <div style="flex:1">
+            <label class="muted">Группа (общий код семьи)</label>
+            <input id="cfg-group" placeholder="family-1" />
+          </div>
+          <button id="cfg-save" class="ok">Сохранить и синхронизировать</button>
+        </div>
+        <div class="row">
+          <button class="danger" id="btn-wipe">Очистить базу</button>
+          <span class="muted">Удалит все сохранённые фразы в этом браузере</span>
+        </div>
+        <div class="row">
+          <button id="btn-backup">Создать резервную копию (.json)</button>
+          <button id="btn-restore">Восстановить из файла</button>
+          <input type="file" id="file-restore" class="hidden" accept="application/json" />
+        </div>
+        <p class="muted">По умолчанию данные локальные. Если заполнить Supabase и «Группа», фразы синхронизируются между всеми устройствами с тем же кодом группы. Можно также передать настройки через URL: <span class="mono">?url=...&key=...&group=...</span></p>
+      </div>
+    </section>
+  </main>
+
+<script>
+  // ——— Storage ———
+  const KEY = 'serge_phrase_cards_v1';
+  const CFG = 'serge_phrase_cards_cfg_v1';
+  const state = { cards: [], cur: null, hiddenRu: false, cfg: { supaUrl:'', supaKey:'', group:'' } };
+  const $ = (q) => document.querySelector(q);
+
+  function load(){
+    try{ const raw = localStorage.getItem(KEY); state.cards = raw? JSON.parse(raw): []; }catch{ state.cards=[] }
+    try{ const c = localStorage.getItem(CFG); state.cfg = c? JSON.parse(c): state.cfg }catch{}
+    refreshTags();
+  }
+  function save(){
+    localStorage.setItem(KEY, JSON.stringify(state.cards));
+    localStorage.setItem(CFG, JSON.stringify(state.cfg));
+    refreshTags();
+    refreshKPIs();
+  }
+
+  function uid(){ return Math.random().toString(36).slice(2,9) }
+
+  // helper for safe line splitting
+  function splitLines(s){ return (s||'').replace(/\r\n?/g,'\n').split('\n') }
+
+  // ——— Nav ———
+  const views = ['add','study','library','import','settings'];
+  const nav = $('#nav');
+  views.forEach(v=>{ const b=document.createElement('button'); b.className='tab'; b.textContent=v.toUpperCase(); b.onclick=()=>show(v); nav.appendChild(b) })
+  function show(v){
+    views.forEach(name=>{ const btn=[...nav.children].find(x=>x.textContent===name.toUpperCase()); btn.classList.toggle('active', name===v); $('#view-'+name).classList.toggle('hidden', name!==v); });
+    if(v==='library') renderLib();
+    if(v==='import') updateExport();
+    if(v==='study') nextCard();
+    if(v==='settings') bindCfg();
+  }
+
+  // ——— Add ———
+  document.getElementById('btn-add').onclick = async function(){
+    const ens = splitLines($('#bulk-en').value).map(s=>s.trim()).filter(Boolean);
+    const rus = splitLines($('#bulk-ru').value).map(s=>s.trim());
+    const tag = ($('#bulk-tag').value||'').trim();
+    if(!ens.length){ $('#add-status').textContent='Нет строк'; return }
+    let okCloud=true; const added=[];
+    for(let i=0;i<ens.length;i++){
+      const card={id:uid(), en:ens[i], ru:rus[i]||'', tag, box:1, created:Date.now(), hits:0, group: state.cfg.group||'default'};
+      state.cards.push(card); added.push(card.en);
+      if(useCloud()) okCloud = (await upsertCloud(card)) && okCloud;
+    }
+    save(); $('#bulk-en').value=''; $('#bulk-ru').value=''; $('#bulk-tag').value='';
+    $('#add-status').textContent = `Добавлено: ${added.length}${useCloud()? (okCloud?' (в облако)':' (локально, облако ошибка)'):''}`;
+    setTimeout(()=>$('#add-status').textContent='',3000);
+  };
+
+  // ——— Tags & KPIs ———
+  function tags(){ return Array.from(new Set(state.cards.map(c=>c.tag).filter(Boolean))).sort() }
+  function refreshTags(){ ['filter-tag','lib-filter-tag'].forEach(id=>{ const sel=$('#'+id); sel.innerHTML=''; const def=document.createElement('option'); def.value=''; def.textContent='— все —'; sel.appendChild(def); tags().forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o) }) }) }
+  function refreshKPIs(){ $('#kpi-total').textContent=state.cards.length; const t=$('#lib-filter-tag').value; const n=state.cards.filter(c=>!t||c.tag===t).length; $('#kpi-by-tag').textContent=n }
+
+  // ——— Library ———
+  function renderLib(){
+    const q=$('#lib-search').value.toLowerCase(); const t=$('#lib-filter-tag').value; const list=$('#lib-list'); list.innerHTML='';
+    state.cards.filter(c=>(!t||c.tag===t)&&(!q||c.en.toLowerCase().includes(q)||c.ru.toLowerCase().includes(q))).forEach(c=>{
+      const el=document.createElement('div'); el.className='card';
+      el.innerHTML=`<div class="flex"><span class="tag">${c.tag||'no-tag'}</span><span class="right muted mono">${c.id}</span></div>
+      <div style="font-size:18px">${escapeHtml(c.en)}</div>
+      <div class="muted">${escapeHtml(c.ru)}</div>
+      <div class="flex"><button data-act="speak">Озвучить</button><button data-act="edit">Редактировать</button><button class="danger" data-act="del">Удалить</button><span class="right muted">Повторы: ${c.hits||0}</span></div>`;
+      el.querySelector('[data-act="speak"]').onclick=()=>speak(c.en);
+      el.querySelector('[data-act="del"]').onclick=async ()=>{ if(confirm('Удалить фразу?')){ state.cards=state.cards.filter(x=>x.id!==c.id); save(); if(useCloud()) await delCloud(c.id); renderLib() } };
+      el.querySelector('[data-act="edit"]').onclick=async ()=>{ const en=prompt('EN', c.en); if(en===null) return; const ru=prompt('RU', c.ru||''); if(ru===null) return; const tag=prompt('TAG', c.tag||''); if(tag===null) return; c.en=en.trim(); c.ru=ru.trim(); c.tag=tag.trim(); save(); if(useCloud()) await upsertCloud(c); renderLib(); };
+      list.appendChild(el)
+    });
+    refreshKPIs();
+  }
+  $('#lib-search').oninput=renderLib; $('#lib-filter-tag').onchange=renderLib; $('#lib-clear').onclick=()=>{ $('#lib-search').value=''; $('#lib-filter-tag').value=''; renderLib(); }
+
+  // ——— Study ———
+  function pick(){ const t=$('#filter-tag').value; const pool=state.cards.filter(c=>!t||c.tag===t); if(!pool.length) return null; return pool[Math.floor(Math.random()*pool.length)] }
+  function nextCard(){ state.cur=pick(); state.hiddenRu=true; renderStudy(); if($('#auto-speak').checked) speak(state.cur?.en||'') }
+  function renderStudy(){ const c=state.cur; $('#study-tag').textContent=c?.tag||''; $('#study-id').textContent=c? c.id: '—'; $('#study-en').textContent=c? c.en: '—'; $('#study-ru').textContent=c? c.ru: '—'; $('#study-ru').style.visibility= state.hiddenRu? 'hidden':'visible'; const seen=c? (c.hits||0):0; $('#study-meta').textContent = c? `повторы: ${seen}`: '' }
+  $('#toggle').onclick=()=>{ state.hiddenRu=!state.hiddenRu; renderStudy() }
+  $('#next').onclick=nextCard;
+  document.getElementById('mark-good').onclick = async function(){ if(!state.cur) return; state.cur.hits=(state.cur.hits||0)+1; save(); if(useCloud()) await upsertCloud(state.cur); nextCard() };
+  document.getElementById('mark-hard').onclick = function(){ if(!state.cur) return; state.cur.hits=(state.cur.hits||0); nextCard() };
+
+  // ——— TTS ———
+  function listVoices(){ const vs=speechSynthesis.getVoices().filter(v=>/en/i.test(v.lang)); const sel=$('#voice'); sel.innerHTML=''; vs.forEach((v)=>{ const o=document.createElement('option'); o.value=v.name; o.textContent=`${v.name} · ${v.lang}`; sel.appendChild(o) }); if(!vs.length){ const o=document.createElement('option'); o.textContent='Голоса не найдены'; sel.appendChild(o) } }
+  function currentVoice(){ const name=$('#voice').value; return speechSynthesis.getVoices().find(v=>v.name===name) || speechSynthesis.getVoices().find(v=>/en-US/i.test(v.lang)) || speechSynthesis.getVoices()[0] }
+  function speak(text){ if(!text) return; const u=new SpeechSynthesisUtterance(text); const v=currentVoice(); if(v) u.voice=v; u.rate=0.95; u.pitch=1; speechSynthesis.cancel(); speechSynthesis.speak(u) }
+  $('#speak').onclick=()=>speak(state.cur?.en||'');
+  $('#auto-speak').onchange=()=>{ if($('#auto-speak').checked) speak(state.cur?.en||'') };
+  window.speechSynthesis.onvoiceschanged = listVoices;
+
+  // ——— Import/Export/Backup ———
+  function updateExport(){ $('#json').value = JSON.stringify(state.cards, null, 2) }
+  $('#btn-export').onclick=()=>{ updateExport(); $('#json').select(); document.execCommand('copy') }
+  $('#btn-download').onclick=()=>{ updateExport(); const blob=new Blob([$('#json').value],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='phrase_cards_backup.json'; a.click() }
+
+  function detectDelim(header){ return header.includes(';') && !header.includes(',') ? ';' : ',' }
+  function parseCSV(text){
+    const lines = splitLines(text).filter(l=>l.trim().length>0);
+    const delim = detectDelim(lines[0]);
+    const head = lines[0].toLowerCase().split(delim).map(s=>s.trim());
+    const idx = { en: head.indexOf('en'), ru: head.indexOf('ru'), tag: head.indexOf('tag') };
+    if(idx.en<0 || idx.ru<0) throw new Error('Нужны заголовки en,ru[,tag]');
+    const rows = [];
+    for(let i=1;i<lines.length;i++){
+      const parts = lines[i].split(delim);
+      const en = (parts[idx.en]||'').trim();
+      const ru = (parts[idx.ru]||'').trim();
+      const tag = (idx.tag>=0 ? (parts[idx.tag]||'').trim() : '');
+      if(en) rows.push({en,ru,tag});
+    }
+    return rows;
+  }
+
+  document.getElementById('btn-import').onclick = async function(){ const txt=$('#csv').value.trim(); if(!txt){ $('#imp-status').textContent='Пусто'; return }
+    try{ const rows=parseCSV(txt); let n=0; const added=[]; rows.forEach(r=>{ const c={id:uid(), en:r.en, ru:r.ru, tag:r.tag, box:1, created:Date.now(), hits:0, group: state.cfg.group||'default'}; state.cards.push(c); added.push(c); n++ }); save();
+      if(useCloud()){ await upsertManyCloud(added); }
+      $('#imp-status').textContent=`Импортировано: ${n}${useCloud()? ' (в облако)':''}`; setTimeout(()=>$('#imp-status').textContent='',1500) }catch(e){ $('#imp-status').textContent=e.message }
+  };
+
+  document.getElementById('btn-fetch').onclick = async function(){ const url=$('#csv-url').value.trim(); if(!url){ $('#imp-status').textContent='Ссылка пуста'; return }
+    try{ const res=await fetch(url); const txt=await res.text(); const rows=parseCSV(txt); let n=0; const added=[]; rows.forEach(r=>{ const c={id:uid(), en:r.en, ru:r.ru, tag:r.tag, box:1, created:Date.now(), hits:0, group: state.cfg.group||'default'}; state.cards.push(c); added.push(c); n++ }); save(); if(useCloud()){ await upsertManyCloud(added); }
+      $('#imp-status').textContent=`Загружено: ${n}${useCloud()? ' (в облако)':''}`; setTimeout(()=>$('#imp-status').textContent='',1500) }catch(e){ $('#imp-status').textContent='Ошибка загрузки: '+e.message }
+  };
+
+  document.getElementById('btn-import-file').onclick = function(){ $('#file-csv').click() };
+  document.getElementById('file-csv').onchange = function(e){ const file=e.target.files[0]; if(!file) return; const fr=new FileReader(); fr.onload=async()=>{ try{ const rows=parseCSV(fr.result); let n=0; const added=[]; rows.forEach(r=>{ const c={id:uid(), en:r.en, ru:r.ru, tag:r.tag, box:1, created:Date.now(), hits:0, group: state.cfg.group||'default'}; state.cards.push(c); added.push(c); n++ }); save(); if(useCloud()){ await upsertManyCloud(added); }
+        $('#imp-status').textContent=`Импортировано: ${n}${useCloud()? ' (в облако)':''}`; setTimeout(()=>$('#imp-status').textContent='',1500) }catch(err){ $('#imp-status').textContent=err.message } }; fr.readAsText(file, 'utf-8') };
+
+  // backup/restore
+  document.getElementById('btn-backup').onclick = function(){ const blob=new Blob([JSON.stringify(state.cards,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='phrase_cards_backup.json'; a.click() };
+  document.getElementById('btn-restore').onclick = function(){ $('#file-restore').click() };
+  document.getElementById('file-restore').onchange = function(e){ const file=e.target.files[0]; if(!file) return; const fr=new FileReader(); fr.onload=()=>{ try{ const data=JSON.parse(fr.result); if(Array.isArray(data)){ state.cards=data; save(); alert('Восстановлено'); renderLib() } }catch{ alert('Некорректный файл') } }; fr.readAsText(file) };
+
+  // ——— Cloud (Supabase) ———
+  function useCloud(){ return !!(state.cfg.supaUrl && state.cfg.supaKey) }
+  function supa(){ if(!useCloud()) return null; return window.supabase.createClient(state.cfg.supaUrl, state.cfg.supaKey) }
+  async function syncFromCloud(){
+    const client=supa(); if(!client) return;
+    const { data, error } = await client.from('cards').select('*').eq('group', state.cfg.group||'default').order('created', { ascending:true });
+    if(error){ console.warn('Cloud read error:', error); alert('Ошибка чтения из облака: '+error.message); return }
+    // merge: не затирать локальные
+    const map = new Map(state.cards.map(c=>[c.id,c]));
+    data.forEach(r=>{ map.set(r.id, { id:r.id, en:r.en, ru:r.ru, tag:r.tag, box:1, created:r.created||Date.now(), hits:r.hits||0, group:r.group }) });
+    state.cards = Array.from(map.values());
+    save(); refreshTags(); renderLib();
+  }
+  async function upsertCloud(c){
+    const client=supa(); if(!client) return true;
+    const { error } = await client.from('cards').upsert({ id:c.id, en:c.en, ru:c.ru, tag:c.tag, hits:c.hits||0, created:c.created||Date.now(), group:c.group||'default' });
+    if(error){ console.warn('Cloud write error:', error); alert('Ошибка записи в облако: '+error.message+'\nПроверь таблицу/политики.'); return false }
+    return true;
+  }
+  async function upsertManyCloud(list){
+    if(!list || !list.length) return true; const client=supa(); if(!client) return true;
+    const payload = list.map(c=>({ id:c.id, en:c.en, ru:c.ru, tag:c.tag, hits:c.hits||0, created:c.created||Date.now(), group:c.group||'default' }));
+    const { error } = await client.from('cards').upsert(payload);
+    if(error){ console.warn('Cloud bulk write error:', error); alert('Ошибка пакетной записи в облако: '+error.message); return false }
+    return true;
+  }
+  async function delCloud(id){ const client=supa(); if(!client) return; await client.from('cards').delete().eq('id', id) }
+  function bindCfg(){
+    $('#cfg-url').value=state.cfg.supaUrl||''; $('#cfg-key').value=state.cfg.supaKey||''; $('#cfg-group').value=state.cfg.group||'';
+    const isUrl = (s)=>/^https?:\/\//i.test(s||'');
+    const isKey = (s)=>/^eyJ[a-zA-Z0-9_-]{10,}\./.test((s||'').replace(/^=/,''));
+    document.getElementById('cfg-save').onclick = async function(){
+      let u = ($('#cfg-url').value||'').trim();
+      let k = ($('#cfg-key').value||'').trim();
+      const g = ($('#cfg-group').value||'').trim()||'default';
+      // авто-правка: убрать случайный '=' в начале, и заменить местами если перепутаны
+      if(/^=/.test(u) && !/^=/.test(k)) u = u.replace(/^=/,'');
+      if(/^=/.test(k) && !/^=/.test(u)) k = k.replace(/^=/,'');
+      if(isKey(u) && isUrl(k)){ const tmp=u; u=k; k=tmp; }
+      if(!isUrl(u)){ alert('Supabase URL должен начинаться с https://'); return }
+      if(!isKey(k)){ alert('Неверный anon key (должен начинаться с eyJ...)'); return }
+      state.cfg={ supaUrl:u, supaKey:k, group:g };
+      save(); await syncFromCloud(); alert('Синхронизация выполнена')
+    };
+    // health check
+    if(!document.getElementById('health')){
+      const b=document.createElement('button'); b.id='health'; b.textContent='Проверка соединения'; b.className='primary';
+      b.onclick = async function(){ if(!useCloud()){ alert('Supabase не настроен'); return } const client=supa(); const { error } = await client.from('cards').select('id').limit(1); if(error) alert('Ошибка: '+error.message); else alert('OK: соединение работает'); };
+      document.querySelector('#view-settings .list').appendChild(b);
+    }
+  }
+
+  // ——— URL автоконфиг ———
+  function applyParamsFromURL(){
+    const p = new URLSearchParams(location.search);
+    let u = p.get('url')||''; let k = p.get('key')||''; let g = p.get('group')||'';
+    const isUrl = (s)=>/^https?:\/\//i.test(s||'');
+    const isKey = (s)=>/^eyJ[a-zA-Z0-9_-]{10,}\./.test((s||'').replace(/^=/,''));
+    if(u||k||g){
+      if(/^=/.test(u)) u=u.replace(/^=/,'');
+      if(/^=/.test(k)) k=k.replace(/^=/,'');
+      // если параметры перепутаны местами
+      if(isKey(u) && isUrl(k)){ const tmp=u; u=k; k=tmp; }
+      state.cfg = {
+        supaUrl: (u||state.cfg.supaUrl||'').trim(),
+        supaKey: (k||state.cfg.supaKey||'').trim(),
+        group: (g||state.cfg.group||'default').trim()
+      };
+      save();
+      try{ history.replaceState(null, '', location.pathname); }catch{}
+      syncFromCloud().then(()=>alert('Синхронизация выполнена'));
+    }
+  }
+
+  // ——— Utils ———
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m])) }
+
+  // ——— Tests (console) ———
+  (function runTests(){
+    // Split lines util
+    const enArr='A\nB\r\nC'; const ruArr='1\n2\r\n3';
+    console.assert(splitLines(enArr).length===3 && splitLines(ruArr).length===3, 'Split failed');
+
+    // CSV parsing CSV
+    const rowsCSV=parseCSV('en,ru,tag\nHello,Привет,greet\nBye,Пока,greet');
+    console.assert(rowsCSV.length===2 && rowsCSV[0].en==='Hello' && rowsCSV[1].tag==='greet', 'CSV parse failed');
+
+    // CSV parsing SSV
+    const rowsSSV=parseCSV('en;ru;tag\nHi;Привет;greet');
+    console.assert(rowsSSV.length===1 && rowsSSV[0].ru==='Привет', 'SSV parse failed');
+
+    // Windows newlines
+    const rowsWin=parseCSV('en,ru,tag\r\nA,А,a\r\nB,Б,b');
+    console.assert(rowsWin.length===2 && rowsWin[1].tag==='b', 'Win newline parse failed');
+
+    // Missing headers should throw
+    let threw=false; try{ parseCSV('en,xx\nA,B'); }catch(e){ threw=true }
+    console.assert(threw, 'Header validation failed');
+
+    // Cloud fns existence
+    console.assert(typeof upsertCloud==='function' && typeof syncFromCloud==='function', 'Cloud functions missing');
+
+    console.log('Tests passed');
+  })();
+
+  // ——— Init ———
+  function init(){ listVoices(); load(); applyParamsFromURL(); show('add'); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
+</script>
+</body>
+</html>
